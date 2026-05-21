@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package greeter;
 
-option go_package = "github.com/andreasneacsu/buf-gen-mcp/example/gen/greeter";
+option go_package = "github.com/andreas-04/buf-gen-mcp/example/gen/greeter";
 
 // GreeterService provides greeting and farewell operations.
 service GreeterService {

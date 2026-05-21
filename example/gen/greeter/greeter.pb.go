@@ -7,11 +7,12 @@
 package greeter
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -231,7 +232,7 @@ const file_greeter_proto_rawDesc = "" +
 	"\x0eGreeterService\x12?\n" +
 	"\bSayHello\x12\x18.greeter.SayHelloRequest\x1a\x19.greeter.SayHelloResponse\x12E\n" +
 	"\n" +
-	"SayGoodbye\x12\x1a.greeter.SayGoodbyeRequest\x1a\x1b.greeter.SayGoodbyeResponseB:Z8github.com/andreasneacsu/buf-gen-mcp/example/gen/greeterb\x06proto3"
+	"SayGoodbye\x12\x1a.greeter.SayGoodbyeRequest\x1a\x1b.greeter.SayGoodbyeResponseB:Z8github.com/andreas-04/buf-gen-mcp/example/gen/greeterb\x06proto3"
 
 var (
 	file_greeter_proto_rawDescOnce sync.Once

@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/andreasneacsu/buf-gen-mcp/example/gen/greeter"
+	pb "github.com/andreas-04/buf-gen-mcp/example/gen/greeter"
 )
 
 func main() {

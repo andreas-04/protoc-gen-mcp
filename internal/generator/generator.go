@@ -8,7 +8,7 @@ import (
 
 	"google.golang.org/protobuf/compiler/protogen"
 
-	"github.com/andreasneacsu/buf-gen-mcp/internal/tmpl"
+	"github.com/andreas-04/buf-gen-mcp/internal/tmpl"
 )
 
 // FileData is the data passed to both code-generation templates.

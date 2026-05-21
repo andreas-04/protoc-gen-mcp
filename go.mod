@@ -1,4 +1,4 @@
-module github.com/andreasneacsu/buf-gen-mcp
+module github.com/andreas-04/buf-gen-mcp
 
 go 1.23
 

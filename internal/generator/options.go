@@ -1,5 +1,4 @@
 package generator
-package generator
 
 import "fmt"
 

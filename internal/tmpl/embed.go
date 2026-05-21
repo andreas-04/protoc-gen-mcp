@@ -1,7 +1,6 @@
 package tmpl
-// Package tmpl embeds all .go.tmpl files and exposes an Execute helper.
-package tmpl
 
+// Package tmpl embeds all .go.tmpl files and exposes an Execute helper.
 import (
 	"bytes"
 	"embed"

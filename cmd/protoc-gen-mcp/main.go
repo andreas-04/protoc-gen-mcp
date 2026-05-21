@@ -1,5 +1,4 @@
 package main
-package main
 
 import (
 	"flag"
@@ -7,7 +6,7 @@ import (
 
 	"google.golang.org/protobuf/compiler/protogen"
 
-	"github.com/andreasneacsu/buf-gen-mcp/internal/generator"
+	"github.com/andreas-04/buf-gen-mcp/internal/generator"
 )
 
 const version = "v0.1.0"
