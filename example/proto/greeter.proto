@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package greeter;
+
+option go_package = "github.com/andreasneacsu/buf-gen-mcp/example/gen/greeter";
+
+// GreeterService provides greeting and farewell operations.
+service GreeterService {
+  // SayHello sends a personalised greeting to the named person.
+  rpc SayHello(SayHelloRequest) returns (SayHelloResponse);
+
+  // SayGoodbye sends a farewell message to the named person.
+  rpc SayGoodbye(SayGoodbyeRequest) returns (SayGoodbyeResponse);
+}
+
+// SayHelloRequest is the request message for SayHello.
+message SayHelloRequest {
+  // name is the person to greet.
+  string name = 1;
+  // language is the BCP-47 language tag for the greeting, e.g. "en" or "es".
+  string language = 2;
+}
+
+// SayHelloResponse is the response message for SayHello.
+message SayHelloResponse {
+  // message is the greeting text.
+  string message = 1;
+}
+
+// SayGoodbyeRequest is the request message for SayGoodbye.
+message SayGoodbyeRequest {
+  // name is the person to say goodbye to.
+  string name = 1;
+}
+
+// SayGoodbyeResponse is the response message for SayGoodbye.
+message SayGoodbyeResponse {
+  // message is the farewell text.
+  string message = 1;
+}

@@ -1,0 +1,20 @@
+version: v2
+plugins:
+  # Generate standard Go protobuf types.
+  - remote: buf.build/protocolbuffers/go
+    out: gen
+    opt:
+      - paths=source_relative
+
+  # Generate gRPC Go stubs (client/server interfaces).
+  - remote: buf.build/grpc/go
+    out: gen
+    opt:
+      - paths=source_relative
+
+  # Generate MCP server code with this plugin.
+  # Build first: make build  (produces ../protoc-gen-mcp)
+  - local: ../protoc-gen-mcp
+    out: gen
+    opt:
+      - paths=source_relative
