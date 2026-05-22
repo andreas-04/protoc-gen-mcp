@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "greeter": {
-      "type": "stdio",
-      "command": "./example/bin/run-mcp.sh"
+      "type": "http",
+      "url": "http://localhost:8080"
     }
   }
 }

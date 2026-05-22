@@ -1,4 +1,4 @@
-.PHONY: build install test test-example generate-example build-example clean
+.PHONY: build install test test-example generate-example build-example run-example clean
 
 BINARY := protoc-gen-mcp
 
@@ -22,10 +22,15 @@ test-example:
 generate-example: build
 	cd example && buf generate
 
-## build-example: compile the greeter-server and mcp-server binaries used by .mcp.json.
+## build-example: compile the example binaries used by .mcp.json and the docs.
 build-example:
-	cd example && go build -o bin/greeter-server ./cmd/greeter-server
-	cd example && go build -o bin/mcp-server    ./cmd/mcp-server
+	cd example && go build -o bin/greeter-server     ./cmd/greeter-server
+	cd example && go build -o bin/mcp-server         ./cmd/mcp-server
+	cd example && go build -o bin/greeter-mcp-server ./cmd/greeter-mcp-server
+
+## run-example: build and run the embedded greeter+MCP server (matches .mcp.json).
+run-example: build-example
+	./example/bin/greeter-mcp-server
 
 ## clean: remove the local binary.
 clean:

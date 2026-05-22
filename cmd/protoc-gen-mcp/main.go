@@ -14,7 +14,7 @@ import (
 )
 
 // version is the protoc-gen-mcp release. Kept in sync with buf.plugin.yaml
-// and the CHANGELOG; reported by `protoc-gen-mcp -version`.
+// and reported by `protoc-gen-mcp -version`.
 const version = "v0.1.0"
 
 func main() {

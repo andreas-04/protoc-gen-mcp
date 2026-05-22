@@ -5,18 +5,27 @@
 {{- end}}
 
 // Package {{.PkgName}} is the drop-in MCP server for the gRPC services
-// generated alongside it. A minimal user main looks like this:
+// generated alongside it.
 //
-//	package main
+// There are two usage patterns:
+//
+//  1. Embed in your gRPC service process (recommended). Construct your
+//     gRPC service implementations as you normally would, then:
+//
+//	mcpSrv := {{.PkgName}}.NewServer()
+//	{{.PkgName}}.RegisterLocal(mcpSrv, {{.PkgName}}.Impls{ /* one field per service */ })
+//	go {{.PkgName}}.ServeHTTP(ctx, mcpSrv, ":8080")
+//
+//     RegisterLocal dispatches directly to the server impls — no gRPC dial,
+//     no serialization, no second port.
+//
+//  2. Standalone deployment. Run Main as your binary's entry point; it
+//     dials a remote gRPC backend and serves MCP over HTTP. Useful when
+//     MCP and gRPC live in different deployments.
 //
 //	import {{q .PkgImportPath}}
 //
 //	func main() { {{.PkgName}}.Main() }
-//
-// Use Main when you just want a runnable binary, Run when you want to control
-// the lifecycle (e.g. inject metadata programmatically, embed in a larger
-// process), or Register when you already manage your own *mcp.Server and just
-// want every generated tool wired up.
 package {{.PkgName}}
 
 import (
@@ -50,16 +59,86 @@ const ServerName = {{q .ServerName}}
 // ServerVersion is the MCP implementation version reported on Initialize.
 const ServerVersion = {{q .ServerVersion}}
 
+// Impls collects the gRPC server implementations to expose as MCP tools.
+// Populate the fields you want to register and pass to RegisterLocal.
+// A zero field is skipped, so callers can wire a subset of services.
+type Impls struct {
+{{- range .Packages}}
+{{- $alias := .Alias}}
+{{- range .Services}}
+	{{.}} {{$alias}}.{{.}}Server
+{{- end}}
+{{- end}}
+}
+
+// NewServer returns an MCP server pre-configured with ServerName and
+// ServerVersion. Use it when you want a server you can register additional
+// hand-written tools on before serving.
+func NewServer() *mcp.Server {
+	return mcp.NewServer(&mcp.Implementation{Name: ServerName, Version: ServerVersion}, nil)
+}
+
+// Register wires every generated tool into s, using conn as the shared gRPC
+// backend. Use this in the standalone deployment pattern where MCP dials a
+// remote gRPC service.
+func Register(s *mcp.Server, conn grpc.ClientConnInterface) {
+{{- range .Packages}}
+{{- $alias := .Alias}}
+{{- range .Services}}
+	{{$alias}}.Register{{.}}Tools(s, {{$alias}}.New{{.}}Client(conn))
+{{- end}}
+{{- end}}
+}
+
+// RegisterLocal wires every generated tool into s, dispatching directly to
+// the supplied server implementations. A nil field is skipped — pass only
+// the services you want to expose. This is the embedded-in-gRPC pattern.
+func RegisterLocal(s *mcp.Server, impls Impls) {
+{{- range .Packages}}
+{{- $alias := .Alias}}
+{{- range .Services}}
+	if impls.{{.}} != nil {
+		{{$alias}}.Register{{.}}Tools(s, {{$alias}}.NewLocal{{.}}Client(impls.{{.}}))
+	}
+{{- end}}
+{{- end}}
+}
+
+// ServeHTTP runs the MCP streamable-HTTP transport on addr, serving s until
+// ctx is cancelled. Each HTTP request gets its own *mcp.Server-bound session
+// (mcp internally manages session state), so s is safe to share.
+//
+// addr accepts any value net.Listen accepts on tcp — ":8080" binds all
+// interfaces, "127.0.0.1:8080" binds loopback only.
+func ServeHTTP(ctx context.Context, s *mcp.Server, addr string) error {
+	handler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return s }, nil)
+
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", addr, err)
+	}
+	log.Printf("%s HTTP server listening on %s", ServerName, ln.Addr())
+
+	srv := &http.Server{Handler: handler}
+	go func() {
+		<-ctx.Done()
+		if err := srv.Shutdown(context.Background()); err != nil {
+			log.Printf("HTTP server shutdown error: %v", err)
+		}
+	}()
+	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("HTTP serve: %w", err)
+	}
+	return nil
+}
+
 // Config controls Run / Main behavior. Field defaults match DefaultConfig.
 type Config struct {
 	// GRPCAddr is the address of the gRPC backend, e.g. "api.example.com:443".
 	GRPCAddr string
 
-	// Transport selects the MCP transport: "stdio" (default) or "http".
-	Transport string
-
-	// HTTPPort is the listen port used when Transport == "http".
-	HTTPPort int
+	// HTTPAddr is the MCP HTTP listen address, e.g. ":8080".
+	HTTPAddr string
 
 	// GRPCTLS enables TLS on the gRPC dial. When false the dial uses
 	// grpc/credentials/insecure (plaintext) — fine for in-process testing,
@@ -86,26 +165,17 @@ type Config struct {
 // DefaultConfig returns the Config used by Main when no flags are supplied.
 func DefaultConfig() Config {
 	return Config{
-		GRPCAddr:  "localhost:50051",
-		Transport: "stdio",
-		HTTPPort:  8080,
+		GRPCAddr: "localhost:50051",
+		HTTPAddr: ":8080",
 	}
 }
 
-// Register wires every generated MCP tool into s, using conn as the shared
-// gRPC backend. Use this when you already own the *mcp.Server lifecycle.
-func Register(s *mcp.Server, conn grpc.ClientConnInterface) {
-{{- range .Packages}}
-{{- $alias := .Alias}}
-{{- range .Services}}
-	{{$alias}}.Register{{.}}Tools(s, {{$alias}}.New{{.}}Client(conn))
-{{- end}}
-{{- end}}
-}
-
-// Run boots an MCP server with cfg until ctx is cancelled or the transport
-// errors. It is the right entry point when you want full control of the
-// process (custom signal handling, embedded use, dependency injection).
+// Run is the standalone-deployment entry point in library form. Dials a
+// remote gRPC backend, registers every generated tool, and serves MCP over
+// HTTP until ctx is cancelled.
+//
+// For the embed-in-gRPC pattern, skip Run and call NewServer +
+// RegisterLocal + ServeHTTP directly from your own main.
 func Run(ctx context.Context, cfg Config) error {
 	creds, err := buildCreds(cfg)
 	if err != nil {
@@ -130,50 +200,15 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer conn.Close()
 
-	switch cfg.Transport {
-	case "stdio":
-		s := mcp.NewServer(&mcp.Implementation{Name: ServerName, Version: ServerVersion}, nil)
-		Register(s, conn)
-		if err := s.Run(ctx, &mcp.StdioTransport{}); err != nil {
-			return fmt.Errorf("stdio transport: %w", err)
-		}
-		return nil
-
-	case "http":
-		// Each HTTP request gets its own *mcp.Server so per-session state
-		// (capability negotiation, protocol version) is isolated. The gRPC
-		// ClientConn is shared across sessions — it is goroutine-safe.
-		handler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
-			s := mcp.NewServer(&mcp.Implementation{Name: ServerName, Version: ServerVersion}, nil)
-			Register(s, conn)
-			return s
-		}, nil)
-		addr := fmt.Sprintf(":%d", cfg.HTTPPort)
-		ln, err := net.Listen("tcp", addr)
-		if err != nil {
-			return fmt.Errorf("listen %s: %w", addr, err)
-		}
-		log.Printf("%s HTTP server listening on %s", ServerName, ln.Addr())
-		srv := &http.Server{Handler: handler}
-		go func() {
-			<-ctx.Done()
-			if err := srv.Shutdown(context.Background()); err != nil {
-				log.Printf("HTTP server shutdown error: %v", err)
-			}
-		}()
-		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("HTTP transport: %w", err)
-		}
-		return nil
-
-	default:
-		return fmt.Errorf("unknown transport %q (expected stdio or http)", cfg.Transport)
-	}
+	s := NewServer()
+	Register(s, conn)
+	return ServeHTTP(ctx, s, cfg.HTTPAddr)
 }
 
-// Main is the full drop-in entry point. Parses standard flags (see -h),
-// installs SIGINT/SIGTERM handling, runs the MCP server, and exits with
-// the appropriate status. Intended as the only statement in your main():
+// Main is the full drop-in entry point for the standalone deployment
+// pattern. Parses standard flags (see -h), installs SIGINT/SIGTERM handling,
+// runs Run, and exits with the appropriate status. Intended as the only
+// statement in your main():
 //
 //	func main() { {{.PkgName}}.Main() }
 func Main() {
@@ -183,8 +218,7 @@ func Main() {
 		mdFlag      multiStringFlag
 	)
 	flag.StringVar(&cfg.GRPCAddr, "grpc-addr", cfg.GRPCAddr, "gRPC backend address")
-	flag.StringVar(&cfg.Transport, "transport", cfg.Transport, "MCP transport: stdio or http")
-	flag.IntVar(&cfg.HTTPPort, "http-port", cfg.HTTPPort, "HTTP listening port when -transport=http")
+	flag.StringVar(&cfg.HTTPAddr, "http-addr", cfg.HTTPAddr, "MCP HTTP listen address")
 	flag.BoolVar(&cfg.GRPCTLS, "grpc-tls", cfg.GRPCTLS, "Connect to the gRPC backend over TLS")
 	flag.BoolVar(&cfg.GRPCTLSInsecureSkipVerify, "grpc-tls-insecure-skip-verify", cfg.GRPCTLSInsecureSkipVerify,
 		"Skip TLS certificate verification (development only)")

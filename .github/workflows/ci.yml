@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: |
+            go.sum
+            example/go.sum
+
+      - name: go vet (plugin)
+        run: go vet ./...
+
+      - name: go test (plugin)
+        run: go test -race -count=1 ./...
+
+      - name: go vet (example)
+        working-directory: example
+        run: go vet ./...
+
+      - name: go test (example)
+        working-directory: example
+        run: go test -race -count=1 -timeout=60s ./...
+
+  drift:
+    name: Regen drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: |
+            go.sum
+            example/go.sum
+
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: buf lint
+        working-directory: example
+        run: buf lint
+
+      - name: Build plugin
+        run: make build
+
+      - name: Regenerate example
+        working-directory: example
+        run: buf generate
+
+      - name: Fail on stale generated files
+        run: |
+          if [ -n "$(git status --porcelain example/gen)" ]; then
+            echo "::error::generated files are out of date; run 'make generate-example' and commit the result"
+            git status --porcelain example/gen
+            git --no-pager diff -- example/gen
+            exit 1
+          fi

@@ -35,6 +35,7 @@ type MethodData struct {
 	ToolName        string
 	Description     string
 	InputGoType     string // unqualified proto request type, e.g. "SayHelloRequest"
+	OutputGoType    string // unqualified proto response type, e.g. "SayHelloResponse"
 	InputStructName string // generated struct name, e.g. "SayHelloInput"
 	InputFields     []FieldData
 }
@@ -263,17 +264,18 @@ func commonPrefix(a, b []string) []string {
 
 // sanitizeAlias strips characters that are not valid in a Go import alias.
 // Package names from go_package are usually clean, but defensive cleanup
-// keeps templated output compilable.
+// keeps templated output compilable. Digits are dropped while the output is
+// empty so the result never starts with a digit.
 func sanitizeAlias(s string) string {
 	if s == "" {
 		return "pb"
 	}
 	var b strings.Builder
-	for i, r := range s {
+	for _, r := range s {
 		switch {
 		case r == '_' || unicode.IsLetter(r):
 			b.WriteRune(r)
-		case unicode.IsDigit(r) && i > 0:
+		case unicode.IsDigit(r) && b.Len() > 0:
 			b.WriteRune(r)
 		}
 	}
@@ -340,6 +342,7 @@ func buildMethodData(svc *protogen.Service, m *protogen.Method) (MethodData, err
 		ToolName:        toToolName(svc.GoName, m.GoName),
 		Description:     desc,
 		InputGoType:     m.Input.GoIdent.GoName,
+		OutputGoType:    m.Output.GoIdent.GoName,
 		InputStructName: m.GoName + "Input",
 	}
 

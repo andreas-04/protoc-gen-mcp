@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -107,4 +108,25 @@ func RegisterGreeterServiceTools(s *mcp.Server, client GreeterServiceClient) {
 			}, nil, nil
 		},
 	)
+}
+
+// localGreeterServiceClient adapts a GreeterServiceServer to the
+// GreeterServiceClient interface by dispatching each call directly to the
+// server impl. Use it to wire MCP tools against your in-process gRPC service
+// without a network round trip.
+type localGreeterServiceClient struct{ srv GreeterServiceServer }
+
+// NewLocalGreeterServiceClient returns a GreeterServiceClient that
+// dispatches every call directly to srv. Pair it with RegisterGreeterServiceTools
+// when the MCP server runs in the same process as your gRPC service.
+func NewLocalGreeterServiceClient(srv GreeterServiceServer) GreeterServiceClient {
+	return &localGreeterServiceClient{srv: srv}
+}
+
+func (c *localGreeterServiceClient) SayHello(ctx context.Context, in *SayHelloRequest, _ ...grpc.CallOption) (*SayHelloResponse, error) {
+	return c.srv.SayHello(ctx, in)
+}
+
+func (c *localGreeterServiceClient) SayGoodbye(ctx context.Context, in *SayGoodbyeRequest, _ ...grpc.CallOption) (*SayGoodbyeResponse, error) {
+	return c.srv.SayGoodbye(ctx, in)
 }

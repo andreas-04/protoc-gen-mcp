@@ -9,9 +9,10 @@ import (
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
 )
-{{range .Services}}
+{{range $svc := .Services}}
 {{range .Methods}}
 // {{.InputStructName}} is the MCP tool input type for the {{.GoName}} RPC.
 // Fields mirror the {{.InputGoType}} proto message with JSON tags compatible
@@ -23,13 +24,13 @@ type {{.InputStructName}} struct {
 {{- end}}
 }
 {{end}}
-// Register{{.GoName}}Tools registers an MCP tool for every unary RPC method
-// in {{.GoName}}.  Streaming RPCs are intentionally omitted.
+// Register{{$svc.GoName}}Tools registers an MCP tool for every unary RPC method
+// in {{$svc.GoName}}.  Streaming RPCs are intentionally omitted.
 //
 // Parameters:
 //   - s      – the MCP server to register tools on.
-//   - client – a connected gRPC client for the {{.GoName}} service.
-func Register{{.GoName}}Tools(s *mcp.Server, client {{.GoName}}Client) {
+//   - client – a connected gRPC client for the {{$svc.GoName}} service.
+func Register{{$svc.GoName}}Tools(s *mcp.Server, client {{$svc.GoName}}Client) {
 {{- range .Methods}}
 	mcp.AddTool(s,
 		&mcp.Tool{
@@ -68,4 +69,22 @@ func Register{{.GoName}}Tools(s *mcp.Server, client {{.GoName}}Client) {
 	)
 {{end -}}
 }
+
+// local{{$svc.GoName}}Client adapts a {{$svc.GoName}}Server to the
+// {{$svc.GoName}}Client interface by dispatching each call directly to the
+// server impl. Use it to wire MCP tools against your in-process gRPC service
+// without a network round trip.
+type local{{$svc.GoName}}Client struct{ srv {{$svc.GoName}}Server }
+
+// NewLocal{{$svc.GoName}}Client returns a {{$svc.GoName}}Client that
+// dispatches every call directly to srv. Pair it with Register{{$svc.GoName}}Tools
+// when the MCP server runs in the same process as your gRPC service.
+func NewLocal{{$svc.GoName}}Client(srv {{$svc.GoName}}Server) {{$svc.GoName}}Client {
+	return &local{{$svc.GoName}}Client{srv: srv}
+}
+{{range .Methods}}
+func (c *local{{$svc.GoName}}Client) {{.GoName}}(ctx context.Context, in *{{.InputGoType}}, _ ...grpc.CallOption) (*{{.OutputGoType}}, error) {
+	return c.srv.{{.GoName}}(ctx, in)
+}
+{{end -}}
 {{end}}
