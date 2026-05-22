@@ -2,8 +2,7 @@
 /protoc-gen-mcp
 
 # Example server binaries (built by `make build-example`)
-/example/bin/greeter-server
-/example/bin/mcp-server
+/example/bin/
 
 # Stray `go build`-into-source-tree artifacts. Building a `package main`
 # without `-o` writes a binary named after the directory; ignoring these
