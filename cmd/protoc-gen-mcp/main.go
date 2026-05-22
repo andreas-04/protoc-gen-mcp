@@ -16,7 +16,7 @@ import (
 
 // version is the protoc-gen-mcp release and is reported by
 // `protoc-gen-mcp -version`.
-const version = "v0.1.0"
+const version = "v1.0.0"
 
 func main() {
 	var showVersion bool

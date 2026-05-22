@@ -9,13 +9,13 @@ import (
 //
 // All options are key=value pairs supplied in buf.gen.yaml:
 //
-//	- local: ../protoc-gen-mcp
-//	  out: gen
-//	  opt:
-//	    - paths=source_relative
-//	    - aggregator_pkg=github.com/acme/api/gen/mcpserver
-//	    - server_name=acme-mcp
-//	    - server_version=1.2.3
+//   - local: ../protoc-gen-mcp
+//     out: gen
+//     opt:
+//   - paths=source_relative
+//   - aggregator_pkg=github.com/acme/api/gen/mcpserver
+//   - server_name=acme-mcp
+//   - server_version=1.2.3
 type Options struct {
 	// GRPCPackage overrides the Go import path used for the gRPC-generated
 	// package in the aggregator. When empty the import path is taken from
@@ -43,7 +43,7 @@ type Options struct {
 	ServerName string
 
 	// ServerVersion is the MCP implementation version reported on
-	// Initialize. Default: '0.1.0'.
+	// Initialize. Default: '1.0.0'.
 	ServerVersion string
 }
 
@@ -54,7 +54,7 @@ func Default() Options {
 	return Options{
 		GenAggregator: true,
 		AggregatorDir: "mcpserver",
-		ServerVersion: "0.1.0",
+		ServerVersion: "1.0.0",
 	}
 }
 

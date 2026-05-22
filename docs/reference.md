@@ -96,7 +96,7 @@ Options go under `opt:` in `buf.gen.yaml`.
 | `aggregator_dir` | `mcpserver` | Directory (relative to `out:`) where the aggregator is written. |
 | `aggregator_pkg` | derived | Full Go import path of the aggregator. Auto-derived as the longest common prefix of generated proto packages plus `aggregator_dir`. Set explicitly when auto-derivation can't find a common parent. |
 | `server_name` | `<first-proto-basename>-mcp` | MCP `Implementation.Name` reported on Initialize. |
-| `server_version` | `0.1.0` | MCP `Implementation.Version` reported on Initialize. |
+| `server_version` | `1.0.0` | MCP `Implementation.Version` reported on Initialize. |
 | `grpc_package` | — | Override the Go import path for the gRPC-generated package referenced from the aggregator. Rarely needed; only set if `go_package` doesn't match the path you want imported. |
 
 ## Multi-proto behavior

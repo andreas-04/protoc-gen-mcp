@@ -107,7 +107,7 @@ func New(opts Options) *Generator {
 		opts.AggregatorDir = "mcpserver"
 	}
 	if opts.ServerVersion == "" {
-		opts.ServerVersion = "0.1.0"
+		opts.ServerVersion = "1.0.0"
 	}
 	return &Generator{
 		opts:      opts,

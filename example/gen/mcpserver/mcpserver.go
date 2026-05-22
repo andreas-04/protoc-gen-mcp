@@ -54,7 +54,7 @@ import (
 const ServerName = "greeter-mcp"
 
 // ServerVersion is the MCP implementation version reported on Initialize.
-const ServerVersion = "0.1.0"
+const ServerVersion = "1.0.0"
 
 // Impls collects the gRPC server implementations to expose as MCP tools.
 // Populate the fields you want to register and pass to RegisterLocal.

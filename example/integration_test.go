@@ -134,7 +134,7 @@ func connectMCPInMemory(t *testing.T) (session *mcp.ClientSession, cleanup func(
 		t.Fatalf("grpc.NewClient: %v", err)
 	}
 
-	mcpSrv := mcp.NewServer(&mcp.Implementation{Name: "greeter-mcp", Version: "0.1.0"}, nil)
+	mcpSrv := mcp.NewServer(&mcp.Implementation{Name: "greeter-mcp", Version: "1.0.0"}, nil)
 	pb.RegisterGreeterServiceTools(mcpSrv, pb.NewGreeterServiceClient(conn))
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
@@ -143,7 +143,7 @@ func connectMCPInMemory(t *testing.T) (session *mcp.ClientSession, cleanup func(
 		t.Fatalf("mcp server Connect: %v", err)
 	}
 
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.1.0"}, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
 	sess, err := mcpClient.Connect(ctx, clientTransport, nil)
 	if err != nil {
 		t.Fatalf("mcp client Connect: %v", err)
@@ -286,14 +286,14 @@ func connectMCPHTTP(t *testing.T) (session *mcp.ClientSession, cleanup func()) {
 
 	// Mirrors the generated mcp-server main exactly.
 	handler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
-		s := mcp.NewServer(&mcp.Implementation{Name: "greeter-mcp", Version: "0.1.0"}, nil)
+		s := mcp.NewServer(&mcp.Implementation{Name: "greeter-mcp", Version: "1.0.0"}, nil)
 		pb.RegisterGreeterServiceTools(s, pb.NewGreeterServiceClient(conn))
 		return s
 	}, nil)
 
 	httpSrv := httptest.NewServer(handler)
 
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.1.0"}, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
 	transport := &mcp.StreamableClientTransport{
 		Endpoint:             httpSrv.URL,
 		DisableStandaloneSSE: true, // keep test connections simple
@@ -389,7 +389,7 @@ func TestAggregator_Register(t *testing.T) {
 	if _, err := srv.Connect(ctx, serverTransport, nil); err != nil {
 		t.Fatalf("mcp Connect: %v", err)
 	}
-	cli := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.1.0"}, nil)
+	cli := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
 	sess, err := cli.Connect(ctx, clientTransport, nil)
 	if err != nil {
 		t.Fatalf("mcp client Connect: %v", err)
@@ -466,7 +466,7 @@ func TestAggregator_RegisterLocal(t *testing.T) {
 	if _, err := mcpSrv.Connect(ctx, serverTransport, nil); err != nil {
 		t.Fatalf("mcp Connect: %v", err)
 	}
-	cli := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.1.0"}, nil)
+	cli := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
 	sess, err := cli.Connect(ctx, clientTransport, nil)
 	if err != nil {
 		t.Fatalf("mcp client Connect: %v", err)
@@ -500,7 +500,7 @@ func TestAggregator_RegisterLocal_NilFieldSkipped(t *testing.T) {
 	if _, err := mcpSrv.Connect(ctx, serverTransport, nil); err != nil {
 		t.Fatalf("mcp Connect: %v", err)
 	}
-	cli := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.1.0"}, nil)
+	cli := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
 	sess, err := cli.Connect(ctx, clientTransport, nil)
 	if err != nil {
 		t.Fatalf("mcp client Connect: %v", err)
@@ -535,7 +535,7 @@ func pickFreeAddr(t *testing.T) string {
 // it yet when we first try.
 func connectMCPWithRetry(t *testing.T, endpoint string) *mcp.ClientSession {
 	t.Helper()
-	cli := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.1.0"}, nil)
+	cli := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
 	transport := &mcp.StreamableClientTransport{Endpoint: endpoint, DisableStandaloneSSE: true}
 	deadline := time.Now().Add(2 * time.Second)
 	for {
