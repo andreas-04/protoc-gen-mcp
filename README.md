@@ -1,5 +1,6 @@
 # protoc-gen-mcp
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/andreas-04/protoc-gen-mcp@v1.0.2.svg)](https://pkg.go.dev/github.com/andreas-04/protoc-gen-mcp@v1.0.2)
 A protoc plugin that turns your existing gRPC services into [MCP][mcp] tools so
 LLM clients can call them directly. Every unary RPC becomes a typed MCP
 tool; you don't write or maintain any glue code.
