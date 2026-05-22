@@ -50,6 +50,12 @@ type FieldData struct {
 	JSONName    string
 	GoType      string
 	Description string
+	// OmitEmpty is true only for pointer, slice, and map/json types where the
+	// zero value (nil) is meaningfully distinct from an explicit empty value.
+	// Plain scalar types (bool, int32, string, …) never get omitempty so that
+	// an MCP client sending false or 0 is not silently dropped before reaching
+	// protojson.Unmarshal.
+	OmitEmpty bool
 }
 
 // GenerateFile produces MCP server code for all services in a single proto
@@ -185,11 +191,13 @@ func buildFieldData(field *protogen.Field) (FieldData, error) {
 		desc = cleanComment(field.Comments.Trailing)
 	}
 
+	goType := protoFieldGoType(field.Desc)
 	return FieldData{
 		GoName:      field.GoName,
 		JSONName:    string(field.Desc.JSONName()),
-		GoType:      protoFieldGoType(field.Desc),
+		GoType:      goType,
 		Description: sanitizeTag(desc),
+		OmitEmpty:   isOmitEmpty(goType),
 	}, nil
 }
 
@@ -212,6 +220,18 @@ func sanitizeTag(s string) string {
 // tool name.  Example: ("GreeterService", "SayHello") → "greeter_service_say_hello".
 func toToolName(serviceName, methodName string) string {
 	return camelToSnake(serviceName) + "_" + camelToSnake(methodName)
+}
+
+// isOmitEmpty reports whether json:",omitempty" should be applied to a field
+// with the given Go type.  Only pointer types (*T), slices ([]T), and opaque
+// JSON types (json.RawMessage) use omitempty — for these, nil/empty is
+// a meaningful signal that the field was absent.  Plain value types (bool,
+// int32, string, …) must NOT use omitempty because json.Marshal would silently
+// drop an explicit false/0/"" before protojson.Unmarshal sees it.
+func isOmitEmpty(goType string) bool {
+	return strings.HasPrefix(goType, "*") ||
+		strings.HasPrefix(goType, "[]") ||
+		goType == "json.RawMessage"
 }
 
 // camelToSnake converts a CamelCase identifier to snake_case.

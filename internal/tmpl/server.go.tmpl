@@ -17,12 +17,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/grpc"
@@ -43,31 +46,40 @@ func main() {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		log.Fatalf("failed to connect to gRPC server %s: %v", *grpcAddr, err)
+		log.Fatalf("failed to create gRPC client for %s: %v", *grpcAddr, err)
 	}
 	defer conn.Close()
 
-	// ── MCP server ────────────────────────────────────────────────────────
-	server := mcp.NewServer(&mcp.Implementation{
-		Name:    {{q .ServerName}},
-		Version: "0.1.0",
-	}, nil)
-
-	// Register tools – one call per service.
-{{- range .Services}}
-	pb.Register{{.GoName}}Tools(server, pb.New{{.GoName}}Client(conn))
-{{- end}}
+	// ── signal handling ───────────────────────────────────────────────────
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	// ── transport ─────────────────────────────────────────────────────────
-	ctx := context.Background()
 	switch *transport {
 	case "stdio":
+		server := mcp.NewServer(&mcp.Implementation{
+			Name:    {{q .ServerName}},
+			Version: "0.1.0",
+		}, nil)
+{{- range .Services}}
+		pb.Register{{.GoName}}Tools(server, pb.New{{.GoName}}Client(conn))
+{{- end}}
 		if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
 			log.Fatalf("server error: %v", err)
 		}
 	case "http":
+		// Each HTTP request gets its own *mcp.Server so per-session state
+		// (capability negotiation, protocol version) is isolated.  The gRPC
+		// ClientConn is shared across sessions — it is goroutine-safe.
 		handler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
-			return server
+			s := mcp.NewServer(&mcp.Implementation{
+				Name:    {{q .ServerName}},
+				Version: "0.1.0",
+			}, nil)
+{{- range .Services}}
+			pb.Register{{.GoName}}Tools(s, pb.New{{.GoName}}Client(conn))
+{{- end}}
+			return s
 		}, nil)
 		addr := fmt.Sprintf(":%d", *httpPort)
 		ln, err := net.Listen("tcp", addr)
@@ -75,7 +87,14 @@ func main() {
 			log.Fatalf("failed to listen on %s: %v", addr, err)
 		}
 		log.Printf("MCP HTTP server listening on %s", addr)
-		if err := http.Serve(ln, handler); err != nil {
+		srv := &http.Server{Handler: handler}
+		go func() {
+			<-ctx.Done()
+			if err := srv.Shutdown(context.Background()); err != nil {
+				log.Printf("HTTP server shutdown error: %v", err)
+			}
+		}()
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("HTTP server error: %v", err)
 		}
 	default:
