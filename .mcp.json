@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "greeter": {
+      "type": "stdio",
+      "command": "./example/bin/run-mcp.sh"
+    }
+  }
+}

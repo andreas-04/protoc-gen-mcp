@@ -3,6 +3,7 @@ package generator
 import (
 	"fmt"
 	"path"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -11,20 +12,14 @@ import (
 	"github.com/andreas-04/buf-gen-mcp/internal/tmpl"
 )
 
-// FileData is the data passed to both code-generation templates.
+// FileData is the data passed to the per-file register template.
 type FileData struct {
 	// SourceFile is the proto source path, e.g. "api/greeter.proto".
 	SourceFile string
 	// PackageName is the Go package name of the generated pb files, e.g. "greeter".
 	PackageName string
-	// GRPCImportPath is the Go import path for the pb/gRPC package.
-	GRPCImportPath string
-	// ServerName is used as the MCP server name, e.g. "greeter-mcp".
-	ServerName string
 	// Services contains one entry per proto service in the file.
 	Services []ServiceData
-	// NeedsJSONImport is true when at least one field uses json.RawMessage.
-	NeedsJSONImport bool
 }
 
 // ServiceData holds template data for a proto service.
@@ -58,77 +53,259 @@ type FieldData struct {
 	OmitEmpty bool
 }
 
-// GenerateFile produces MCP server code for all services in a single proto
-// file.  When genServer is true it also emits the standalone cmd/mcp-server/main.go.
-func GenerateFile(gen *protogen.Plugin, f *protogen.File, opts Options, genServer bool) error {
-	data, err := buildFileData(f, opts)
+// registeredPackage captures the data the aggregator needs to wire up a
+// single generated proto package: where to import it from, what alias to
+// use, and which Register*Tools / New*Client pairs to call.
+type registeredPackage struct {
+	ImportPath string
+	Alias      string
+	Services   []string // GoName of each service in this package
+}
+
+// AggregatorData is the template data for the standalone aggregator file.
+type AggregatorData struct {
+	PkgName       string
+	PkgImportPath string // full import path users will write in their main
+	ServerName    string
+	ServerVersion string
+	Packages      []registeredPackage
+	SourceFiles   []string // for the DO NOT EDIT header
+}
+
+// Generator drives a single protoc-gen-mcp invocation. It is created once
+// per Run, fed every generated file via AddFile, and emits the aggregator
+// in Finalize.
+type Generator struct {
+	opts Options
+
+	// registered tracks per-package state so the aggregator can wire every
+	// generated Register*Tools call.
+	registered []*registeredPackage
+	// pkgByPath dedups when two files share the same Go package (e.g. two
+	// .proto files with the same go_package).
+	pkgByPath map[string]*registeredPackage
+	// firstProtoBasename is used to derive a default server name.
+	firstProtoBasename string
+	// sourceFiles is the list of proto paths fed to the aggregator header.
+	sourceFiles []string
+}
+
+// New returns a Generator configured with opts. Defaults from Default() are
+// applied for any zero-valued option.
+func New(opts Options) *Generator {
+	if opts.AggregatorDir == "" {
+		opts.AggregatorDir = "mcpserver"
+	}
+	if opts.ServerVersion == "" {
+		opts.ServerVersion = "0.1.0"
+	}
+	return &Generator{
+		opts:      opts,
+		pkgByPath: make(map[string]*registeredPackage),
+	}
+}
+
+// AddFile emits the per-file _mcp.pb.go library and records the file's
+// services so they can be wired into the aggregator in Finalize.
+func (g *Generator) AddFile(gen *protogen.Plugin, f *protogen.File) error {
+	data, err := buildFileData(f)
 	if err != nil {
 		return err
 	}
+	if len(data.Services) == 0 {
+		return nil
+	}
 
-	// ── library file ──────────────────────────────────────────────────────
 	registerSrc, err := tmpl.Execute("register.go.tmpl", data)
 	if err != nil {
 		return fmt.Errorf("register.go.tmpl: %w", err)
 	}
 	regFile := gen.NewGeneratedFile(f.GeneratedFilenamePrefix+"_mcp.pb.go", f.GoImportPath)
 	if _, err := regFile.Write([]byte(registerSrc)); err != nil {
-		return fmt.Errorf("writing library file: %w", err)
+		return fmt.Errorf("writing register file: %w", err)
 	}
 
-	// ── standalone server ─────────────────────────────────────────────────
-	if genServer {
-		serverSrc, err := tmpl.Execute("server.go.tmpl", data)
-		if err != nil {
-			return fmt.Errorf("server.go.tmpl: %w", err)
+	// Track this package for the aggregator.
+	importPath := string(f.GoImportPath)
+	if g.opts.GRPCPackage != "" {
+		importPath = g.opts.GRPCPackage
+	}
+	pkg, ok := g.pkgByPath[importPath]
+	if !ok {
+		pkg = &registeredPackage{
+			ImportPath: importPath,
+			Alias:      string(f.GoPackageName),
 		}
-		// Use "" as the import path: this is a main package.
-		srvFile := gen.NewGeneratedFile("cmd/mcp-server/main.go", "")
-		if _, err := srvFile.Write([]byte(serverSrc)); err != nil {
-			return fmt.Errorf("writing server file: %w", err)
-		}
+		g.pkgByPath[importPath] = pkg
+		g.registered = append(g.registered, pkg)
+	}
+	for _, svc := range data.Services {
+		pkg.Services = append(pkg.Services, svc.GoName)
 	}
 
+	g.sourceFiles = append(g.sourceFiles, f.Desc.Path())
+	if g.firstProtoBasename == "" {
+		g.firstProtoBasename = strings.TrimSuffix(path.Base(f.Desc.Path()), ".proto")
+	}
 	return nil
 }
 
+// Finalize emits the aggregator file once all per-file libraries are in.
+// It is a no-op when Options.GenAggregator is false or no services were
+// registered.
+func (g *Generator) Finalize(gen *protogen.Plugin) error {
+	if !g.opts.GenAggregator || len(g.registered) == 0 {
+		return nil
+	}
+
+	aggPkgPath := g.opts.AggregatorPkg
+	if aggPkgPath == "" {
+		var err error
+		aggPkgPath, err = deriveAggregatorPkg(g.registered, g.opts.AggregatorDir)
+		if err != nil {
+			return fmt.Errorf("could not derive aggregator package path; set 'aggregator_pkg' opt: %w", err)
+		}
+	}
+	pkgName := path.Base(aggPkgPath)
+
+	// Resolve import aliases to avoid collisions when two packages share a
+	// base name. Iterate in stable order so codegen output is deterministic.
+	sort.SliceStable(g.registered, func(i, j int) bool {
+		return g.registered[i].ImportPath < g.registered[j].ImportPath
+	})
+	used := map[string]bool{pkgName: true}
+	for _, pkg := range g.registered {
+		base := sanitizeAlias(pkg.Alias)
+		alias := base
+		for i := 2; used[alias]; i++ {
+			alias = fmt.Sprintf("%s%d", base, i)
+		}
+		used[alias] = true
+		pkg.Alias = alias
+	}
+
+	serverName := g.opts.ServerName
+	if serverName == "" {
+		serverName = g.firstProtoBasename + "-mcp"
+	}
+
+	data := AggregatorData{
+		PkgName:       pkgName,
+		PkgImportPath: aggPkgPath,
+		ServerName:    serverName,
+		ServerVersion: g.opts.ServerVersion,
+		Packages:      derefPackages(g.registered),
+		SourceFiles:   g.sourceFiles,
+	}
+	src, err := tmpl.Execute("aggregator.go.tmpl", data)
+	if err != nil {
+		return fmt.Errorf("aggregator.go.tmpl: %w", err)
+	}
+
+	filename := path.Join(g.opts.AggregatorDir, "mcpserver.go")
+	out := gen.NewGeneratedFile(filename, protogen.GoImportPath(aggPkgPath))
+	if _, err := out.Write([]byte(src)); err != nil {
+		return fmt.Errorf("writing aggregator: %w", err)
+	}
+	return nil
+}
+
+// derefPackages converts []*registeredPackage to []registeredPackage so it can
+// be passed to a text/template without callers depending on the pointer type.
+func derefPackages(in []*registeredPackage) []registeredPackage {
+	out := make([]registeredPackage, len(in))
+	for i, p := range in {
+		out[i] = *p
+	}
+	return out
+}
+
+// deriveAggregatorPkg picks an aggregator import path from the longest
+// common '/'-segment prefix of the registered proto packages, plus dir.
+//
+// Single-package case: drop the package's own last segment first so the
+// aggregator lives as a sibling rather than nested inside the proto package.
+func deriveAggregatorPkg(pkgs []*registeredPackage, dir string) (string, error) {
+	if len(pkgs) == 0 {
+		return "", fmt.Errorf("no proto packages were registered")
+	}
+	segments := make([][]string, len(pkgs))
+	for i, p := range pkgs {
+		segments[i] = strings.Split(p.ImportPath, "/")
+	}
+	common := segments[0]
+	for _, s := range segments[1:] {
+		common = commonPrefix(common, s)
+	}
+	if len(pkgs) == 1 && len(common) > 0 {
+		common = common[:len(common)-1]
+	}
+	if len(common) == 0 {
+		return "", fmt.Errorf("proto packages have no common path prefix")
+	}
+	return path.Join(append(common, dir)...), nil
+}
+
+func commonPrefix(a, b []string) []string {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	out := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		if a[i] != b[i] {
+			break
+		}
+		out = append(out, a[i])
+	}
+	return out
+}
+
+// sanitizeAlias strips characters that are not valid in a Go import alias.
+// Package names from go_package are usually clean, but defensive cleanup
+// keeps templated output compilable.
+func sanitizeAlias(s string) string {
+	if s == "" {
+		return "pb"
+	}
+	var b strings.Builder
+	for i, r := range s {
+		switch {
+		case r == '_' || unicode.IsLetter(r):
+			b.WriteRune(r)
+		case unicode.IsDigit(r) && i > 0:
+			b.WriteRune(r)
+		}
+	}
+	if b.Len() == 0 {
+		return "pb"
+	}
+	return b.String()
+}
+
 // buildFileData constructs the FileData from a parsed proto file.
-func buildFileData(f *protogen.File, opts Options) (FileData, error) {
-	grpcImportPath := string(f.GoImportPath)
-	if opts.GRPCPackage != "" {
-		grpcImportPath = opts.GRPCPackage
-	}
-
-	// Derive a human-readable server name from the proto package name.
-	pkgName := string(f.GoPackageName)
-	serverName := pkgName
-	if p := strings.TrimSuffix(path.Base(f.Desc.Path()), ".proto"); p != "" {
-		serverName = p
-	}
-
+func buildFileData(f *protogen.File) (FileData, error) {
 	data := FileData{
-		SourceFile:     f.Desc.Path(),
-		PackageName:    pkgName,
-		GRPCImportPath: grpcImportPath,
-		ServerName:     serverName + "-mcp",
+		SourceFile:  f.Desc.Path(),
+		PackageName: string(f.GoPackageName),
 	}
 
 	for _, svc := range f.Services {
-		svcData, hasJSON, err := buildServiceData(svc)
+		svcData, err := buildServiceData(svc)
 		if err != nil {
 			return FileData{}, err
 		}
-		data.Services = append(data.Services, svcData)
-		if hasJSON {
-			data.NeedsJSONImport = true
+		if len(svcData.Methods) == 0 {
+			// Service has only streaming RPCs; skip it.
+			continue
 		}
+		data.Services = append(data.Services, svcData)
 	}
-
 	return data, nil
 }
 
 // buildServiceData converts a protogen.Service into ServiceData.
-func buildServiceData(svc *protogen.Service) (ServiceData, bool, error) {
+func buildServiceData(svc *protogen.Service) (ServiceData, error) {
 	sd := ServiceData{
 		GoName:      svc.GoName,
 		Description: cleanComment(svc.Comments.Leading),
@@ -137,26 +314,22 @@ func buildServiceData(svc *protogen.Service) (ServiceData, bool, error) {
 		sd.Description = svc.GoName + " gRPC service."
 	}
 
-	hasJSON := false
 	for _, m := range svc.Methods {
 		// Skip all streaming RPCs – only unary methods become MCP tools.
 		if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {
 			continue
 		}
-		md, jsonField, err := buildMethodData(svc, m)
+		md, err := buildMethodData(svc, m)
 		if err != nil {
-			return ServiceData{}, false, err
+			return ServiceData{}, err
 		}
 		sd.Methods = append(sd.Methods, md)
-		if jsonField {
-			hasJSON = true
-		}
 	}
-	return sd, hasJSON, nil
+	return sd, nil
 }
 
 // buildMethodData converts a protogen.Method into MethodData.
-func buildMethodData(svc *protogen.Service, m *protogen.Method) (MethodData, bool, error) {
+func buildMethodData(svc *protogen.Service, m *protogen.Method) (MethodData, error) {
 	desc := cleanComment(m.Comments.Leading)
 	if desc == "" {
 		desc = "Calls the " + svc.GoName + " " + m.GoName + " RPC."
@@ -170,18 +343,14 @@ func buildMethodData(svc *protogen.Service, m *protogen.Method) (MethodData, boo
 		InputStructName: m.GoName + "Input",
 	}
 
-	hasJSON := false
 	for _, field := range m.Input.Fields {
 		fd, err := buildFieldData(field)
 		if err != nil {
-			return MethodData{}, false, err
+			return MethodData{}, err
 		}
 		md.InputFields = append(md.InputFields, fd)
-		if needsJSONImport(fd.GoType) {
-			hasJSON = true
-		}
 	}
-	return md, hasJSON, nil
+	return md, nil
 }
 
 // buildFieldData converts a protogen.Field into FieldData.

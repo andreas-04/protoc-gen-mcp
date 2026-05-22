@@ -1,3 +1,7 @@
+// Command protoc-gen-mcp is a protoc plugin that generates MCP (Model Context
+// Protocol) server bindings for the gRPC services defined in a proto file.
+//
+// See the project README for a list of supported opt: parameters.
 package main
 
 import (
@@ -9,6 +13,8 @@ import (
 	"github.com/andreas-04/buf-gen-mcp/internal/generator"
 )
 
+// version is the protoc-gen-mcp release. Kept in sync with buf.plugin.yaml
+// and the CHANGELOG; reported by `protoc-gen-mcp -version`.
 const version = "v0.1.0"
 
 func main() {
@@ -21,15 +27,11 @@ func main() {
 		return
 	}
 
-	var opts generator.Options
+	opts := generator.Default()
 	protogen.Options{
 		ParamFunc: opts.Set,
 	}.Run(func(gen *protogen.Plugin) error {
-		// Track whether the standalone server has been generated already.
-		// With strategy: directory, multiple files may arrive in a single
-		// invocation; we only emit cmd/mcp-server/main.go once.
-		serverGenerated := false
-
+		g := generator.New(opts)
 		for _, f := range gen.Files {
 			if !f.Generate {
 				continue
@@ -37,11 +39,10 @@ func main() {
 			if len(f.Services) == 0 {
 				continue
 			}
-			if err := generator.GenerateFile(gen, f, opts, !serverGenerated); err != nil {
+			if err := g.AddFile(gen, f); err != nil {
 				return err
 			}
-			serverGenerated = true
 		}
-		return nil
+		return g.Finalize(gen)
 	})
 }

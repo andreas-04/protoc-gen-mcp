@@ -12,10 +12,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-// Ensure json is used even when all input fields are scalars.
-var _ = json.RawMessage(nil)
-var _ = fmt.Sprintf
-
 // SayHelloInput is the MCP tool input type for the SayHello RPC.
 // Fields mirror the SayHelloRequest proto message with JSON tags compatible
 // with protojson, so the struct can be round-tripped through json.Marshal /

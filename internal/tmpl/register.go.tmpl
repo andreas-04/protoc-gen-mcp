@@ -11,10 +11,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/encoding/protojson"
 )
-
-// Ensure json is used even when all input fields are scalars.
-var _ = json.RawMessage(nil)
-var _ = fmt.Sprintf
 {{range .Services}}
 {{range .Methods}}
 // {{.InputStructName}} is the MCP tool input type for the {{.GoName}} RPC.

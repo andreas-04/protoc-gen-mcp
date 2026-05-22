@@ -1,0 +1,15 @@
+# Plugin binary (built by `make build`)
+/protoc-gen-mcp
+
+# Example server binaries (built by `make build-example`)
+/example/bin/greeter-server
+/example/bin/mcp-server
+
+# Stray `go build`-into-source-tree artifacts. Building a `package main`
+# without `-o` writes a binary named after the directory; ignoring these
+# defensively keeps the repo clean if a contributor runs `go build` by
+# mistake from inside cmd/*/.
+/example/greeter-server
+/example/mcp-server
+/example/cmd/*/greeter-server
+/example/cmd/*/mcp-server

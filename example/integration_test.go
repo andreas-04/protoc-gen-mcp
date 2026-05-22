@@ -1,13 +1,15 @@
 // Package example_test contains end-to-end integration tests for the generated
 // gRPC → MCP bridge code.
 //
-// Three layers are exercised:
+// Four layers are exercised:
 //
 //  1. gRPC server (direct): verifies the example Greeter implementation.
 //  2. MCP tools over in-memory transport: verifies the generated
 //     RegisterGreeterServiceTools wiring without any network overhead.
 //  3. MCP tools over HTTP transport: verifies the full generated mcp-server
 //     stack using mcp.NewStreamableHTTPHandler and mcp.StreamableClientTransport.
+//  4. Aggregator Run/Register over HTTP: verifies the generated mcpserver
+//     drop-in package wires every tool through Run(ctx, Config).
 package example_test
 
 import (
@@ -18,8 +20,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	pb "github.com/andreas-04/buf-gen-mcp/example/gen/greeter"
+	"github.com/andreas-04/buf-gen-mcp/example/gen/mcpserver"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -350,6 +354,118 @@ func TestMCPHTTP_SayGoodbye(t *testing.T) {
 	text := toolText(t, res)
 	if !strings.Contains(text, "Goodbye") || !strings.Contains(text, "Charlie") {
 		t.Errorf("unexpected response: %s", text)
+	}
+}
+
+// ── Layer 4: aggregator mcpserver.Run + Register ─────────────────────────────
+
+// TestAggregator_Register verifies the generated mcpserver.Register helper
+// wires every tool against an arbitrary *mcp.Server. This is the path users
+// take when they manage their own MCP server lifecycle.
+func TestAggregator_Register(t *testing.T) {
+	grpcAddr, stopGRPC := startGRPCServer(t)
+	defer stopGRPC()
+
+	conn, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient: %v", err)
+	}
+	defer conn.Close()
+
+	srv := mcp.NewServer(&mcp.Implementation{Name: "agg-test", Version: "0.0.0"}, nil)
+	mcpserver.Register(srv, conn)
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := srv.Connect(ctx, serverTransport, nil); err != nil {
+		t.Fatalf("mcp Connect: %v", err)
+	}
+	cli := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.1.0"}, nil)
+	sess, err := cli.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("mcp client Connect: %v", err)
+	}
+	defer sess.Close()
+
+	got, err := sess.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	if len(got.Tools) != 2 {
+		t.Fatalf("got %d tools; want 2", len(got.Tools))
+	}
+}
+
+// TestAggregator_RunHTTP boots the full mcpserver.Run pipeline on a random
+// HTTP port and connects an MCP client over it, end-to-end. This is the
+// path users get when their main() calls mcpserver.Main().
+func TestAggregator_RunHTTP(t *testing.T) {
+	grpcAddr, stopGRPC := startGRPCServer(t)
+	defer stopGRPC()
+
+	// Pick a free HTTP port.
+	ln, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("net.Listen: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+
+	cfg := mcpserver.DefaultConfig()
+	cfg.GRPCAddr = grpcAddr
+	cfg.Transport = "http"
+	cfg.HTTPPort = port
+
+	runCtx, runCancel := context.WithCancel(context.Background())
+	runErr := make(chan error, 1)
+	go func() { runErr <- mcpserver.Run(runCtx, cfg) }()
+
+	endpoint := fmt.Sprintf("http://127.0.0.1:%d", port)
+	cli := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.1.0"}, nil)
+	transport := &mcp.StreamableClientTransport{Endpoint: endpoint, DisableStandaloneSSE: true}
+
+	// Connect with retry — the goroutine may not have bound the listener yet.
+	var sess *mcp.ClientSession
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		sess, err = cli.Connect(ctx, transport, nil)
+		cancel()
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			runCancel()
+			t.Fatalf("mcp client Connect: %v", err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	defer sess.Close()
+
+	res, err := sess.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "greeter_service_say_hello",
+		Arguments: map[string]any{"name": "Run", "language": "de"},
+	})
+	if err != nil {
+		runCancel()
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		runCancel()
+		t.Fatalf("tool returned error: %v", res.Content)
+	}
+	if got := toolText(t, res); !strings.Contains(got, "Hallo, Run!") {
+		t.Errorf("unexpected response: %s", got)
+	}
+
+	runCancel()
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("mcpserver.Run returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("mcpserver.Run did not shut down within 2s of context cancel")
 	}
 }
 
