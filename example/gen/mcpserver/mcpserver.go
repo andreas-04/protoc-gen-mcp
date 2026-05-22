@@ -21,7 +21,7 @@
 //     dials a remote gRPC backend and serves MCP over HTTP. Useful when
 //     MCP and gRPC live in different deployments.
 //
-//     import "github.com/andreas-04/buf-gen-mcp/example/gen/mcpserver"
+//     import "github.com/andreas-04/protoc-gen-mcp/example/gen/mcpserver"
 //
 //     func main() { mcpserver.Main() }
 package mcpserver
@@ -47,7 +47,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	greeter "github.com/andreas-04/buf-gen-mcp/example/gen/greeter"
+	greeter "github.com/andreas-04/protoc-gen-mcp/example/gen/greeter"
 )
 
 // ServerName is the MCP implementation name reported on Initialize.
@@ -170,10 +170,7 @@ func Run(ctx context.Context, cfg Config) error {
 		if err != nil {
 			return err
 		}
-		dialOpts = append(dialOpts,
-			grpc.WithUnaryInterceptor(metadataUnaryInterceptor(md)),
-			grpc.WithStreamInterceptor(metadataStreamInterceptor(md)),
-		)
+		dialOpts = append(dialOpts, grpc.WithUnaryInterceptor(metadataUnaryInterceptor(md)))
 	}
 
 	conn, err := grpc.NewClient(cfg.GRPCAddr, dialOpts...)
@@ -255,12 +252,6 @@ func parseMetadata(pairs []string) (metadata.MD, error) {
 func metadataUnaryInterceptor(md metadata.MD) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		return invoker(metadata.NewOutgoingContext(ctx, md), method, req, reply, cc, opts...)
-	}
-}
-
-func metadataStreamInterceptor(md metadata.MD) grpc.StreamClientInterceptor {
-	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-		return streamer(metadata.NewOutgoingContext(ctx, md), desc, cc, method, opts...)
 	}
 }
 

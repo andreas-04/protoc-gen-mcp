@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/andreas-04/buf-gen-mcp/example/gen/greeter"
-	"github.com/andreas-04/buf-gen-mcp/example/gen/mcpserver"
-	"github.com/andreas-04/buf-gen-mcp/example/internal/greeterimpl"
+	pb "github.com/andreas-04/protoc-gen-mcp/example/gen/greeter"
+	"github.com/andreas-04/protoc-gen-mcp/example/gen/mcpserver"
+	"github.com/andreas-04/protoc-gen-mcp/example/internal/greeterimpl"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -214,6 +214,39 @@ func TestMCPInMemory_SayHello(t *testing.T) {
 				t.Errorf("response %q does not contain %q", text, tc.wantPrefix)
 			}
 		})
+	}
+}
+
+// TestMCPInMemory_SayHello_OptionalTitle verifies that the proto3 'optional'
+// keyword survives the MCP→gRPC round trip: when the MCP client omits the
+// 'title' field, the gRPC server sees req.Title == nil. When the client
+// supplies it, the value reaches the impl.
+func TestMCPInMemory_SayHello_OptionalTitle(t *testing.T) {
+	sess, cleanup := connectMCPInMemory(t)
+	defer cleanup()
+
+	// Title omitted: greeter should NOT prefix.
+	res, err := sess.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "greeter_service_say_hello",
+		Arguments: map[string]any{"name": "Pat", "language": ""},
+	})
+	if err != nil {
+		t.Fatalf("CallTool (no title): %v", err)
+	}
+	if got := toolText(t, res); !strings.Contains(got, "Hello, Pat!") || strings.Contains(got, "Dr.") {
+		t.Errorf("unexpected response without title: %s", got)
+	}
+
+	// Title present: greeter prefixes.
+	res, err = sess.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "greeter_service_say_hello",
+		Arguments: map[string]any{"name": "Pat", "language": "", "title": "Dr."},
+	})
+	if err != nil {
+		t.Fatalf("CallTool (with title): %v", err)
+	}
+	if got := toolText(t, res); !strings.Contains(got, "Hello, Dr. Pat!") {
+		t.Errorf("unexpected response with title: %s", got)
 	}
 }
 

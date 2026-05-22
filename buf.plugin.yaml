@@ -1,9 +1,0 @@
-plugin_version: v0.1.0
-source_url: https://github.com/andreasneacsu/buf-gen-mcp
-description: >
-  Generates MCP (Model Context Protocol) server code from gRPC proto definitions.
-  Each unary RPC method becomes an MCP tool, allowing LLMs to call your gRPC
-  services directly through the MCP protocol. Supports both stdio and HTTP/SSE
-  transports. Streaming RPCs are intentionally omitted.
-output_languages:
-  - go

@@ -9,7 +9,7 @@ import (
 
 	"google.golang.org/protobuf/compiler/protogen"
 
-	"github.com/andreas-04/buf-gen-mcp/internal/tmpl"
+	"github.com/andreas-04/protoc-gen-mcp/internal/tmpl"
 )
 
 // FileData is the data passed to the per-file register template.
@@ -54,13 +54,22 @@ type FieldData struct {
 	OmitEmpty bool
 }
 
+// registeredService captures one service inside a registeredPackage.
+// GoName is the proto service's Go identifier (used for Register*Tools /
+// New*Client / *Server type references). FieldName is the Impls struct
+// field name, disambiguated when the same GoName appears in two packages.
+type registeredService struct {
+	GoName    string
+	FieldName string
+}
+
 // registeredPackage captures the data the aggregator needs to wire up a
 // single generated proto package: where to import it from, what alias to
-// use, and which Register*Tools / New*Client pairs to call.
+// use, and which services to register.
 type registeredPackage struct {
 	ImportPath string
 	Alias      string
-	Services   []string // GoName of each service in this package
+	Services   []registeredService
 }
 
 // AggregatorData is the template data for the standalone aggregator file.
@@ -141,7 +150,7 @@ func (g *Generator) AddFile(gen *protogen.Plugin, f *protogen.File) error {
 		g.registered = append(g.registered, pkg)
 	}
 	for _, svc := range data.Services {
-		pkg.Services = append(pkg.Services, svc.GoName)
+		pkg.Services = append(pkg.Services, registeredService{GoName: svc.GoName})
 	}
 
 	g.sourceFiles = append(g.sourceFiles, f.Desc.Path())
@@ -185,6 +194,8 @@ func (g *Generator) Finalize(gen *protogen.Plugin) error {
 		pkg.Alias = alias
 	}
 
+	assignFieldNames(g.registered)
+
 	serverName := g.opts.ServerName
 	if serverName == "" {
 		serverName = g.firstProtoBasename + "-mcp"
@@ -203,7 +214,11 @@ func (g *Generator) Finalize(gen *protogen.Plugin) error {
 		return fmt.Errorf("aggregator.go.tmpl: %w", err)
 	}
 
-	filename := path.Join(g.opts.AggregatorDir, "mcpserver.go")
+	// Filename uses pkgName (last segment of the import path), not the raw
+	// aggregator_dir opt. Otherwise a user who sets aggregator_pkg with a
+	// different last segment would get a file path that disagrees with the
+	// package declaration and can't be imported.
+	filename := path.Join(pkgName, "mcpserver.go")
 	out := gen.NewGeneratedFile(filename, protogen.GoImportPath(aggPkgPath))
 	if _, err := out.Write([]byte(src)); err != nil {
 		return fmt.Errorf("writing aggregator: %w", err)
@@ -260,6 +275,44 @@ func commonPrefix(a, b []string) []string {
 		out = append(out, a[i])
 	}
 	return out
+}
+
+// assignFieldNames populates each registeredService.FieldName. First
+// occurrence of a GoName wins the unqualified name; subsequent collisions
+// get the package alias (TitleCase'd) prepended, then numeric suffixes if
+// still colliding.
+func assignFieldNames(pkgs []*registeredPackage) {
+	used := map[string]bool{}
+	for _, pkg := range pkgs {
+		for i := range pkg.Services {
+			name := pkg.Services[i].GoName
+			if !used[name] {
+				pkg.Services[i].FieldName = name
+				used[name] = true
+				continue
+			}
+			prefixed := titleFirst(pkg.Alias) + name
+			candidate := prefixed
+			for n := 2; used[candidate]; n++ {
+				candidate = fmt.Sprintf("%s%d", prefixed, n)
+			}
+			pkg.Services[i].FieldName = candidate
+			used[candidate] = true
+		}
+	}
+}
+
+// titleFirst returns s with its first rune mapped to upper case. Used to
+// build Impls field names on collision (lowercase package alias 'auth' +
+// 'AuthService' would produce 'authAuthService' — not a valid exported
+// Go identifier — so we capitalize first).
+func titleFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	r[0] = unicode.ToUpper(r[0])
+	return string(r)
 }
 
 // sanitizeAlias strips characters that are not valid in a Go import alias.
@@ -347,22 +400,17 @@ func buildMethodData(svc *protogen.Service, m *protogen.Method) (MethodData, err
 	}
 
 	for _, field := range m.Input.Fields {
-		fd, err := buildFieldData(field)
-		if err != nil {
-			return MethodData{}, err
-		}
-		md.InputFields = append(md.InputFields, fd)
+		md.InputFields = append(md.InputFields, buildFieldData(field))
 	}
 	return md, nil
 }
 
 // buildFieldData converts a protogen.Field into FieldData.
-func buildFieldData(field *protogen.Field) (FieldData, error) {
+func buildFieldData(field *protogen.Field) FieldData {
 	desc := cleanComment(field.Comments.Leading)
 	if desc == "" {
 		desc = cleanComment(field.Comments.Trailing)
 	}
-
 	goType := protoFieldGoType(field.Desc)
 	return FieldData{
 		GoName:      field.GoName,
@@ -370,7 +418,7 @@ func buildFieldData(field *protogen.Field) (FieldData, error) {
 		GoType:      goType,
 		Description: sanitizeTag(desc),
 		OmitEmpty:   isOmitEmpty(goType),
-	}, nil
+	}
 }
 
 // cleanComment strips comment delimiters and trims whitespace from a

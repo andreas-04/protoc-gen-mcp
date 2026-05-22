@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package greeter;
 
-option go_package = "github.com/andreas-04/buf-gen-mcp/example/gen/greeter";
+option go_package = "github.com/andreas-04/protoc-gen-mcp/example/gen/greeter";
 
 // GreeterService provides greeting and farewell operations.
 service GreeterService {
@@ -19,6 +19,10 @@ message SayHelloRequest {
   string name = 1;
   // language is the BCP-47 language tag for the greeting, e.g. "en" or "es".
   string language = 2;
+  // title is an honorific to prefix the name with, e.g. "Dr." or "Ms.".
+  // Marked optional to demonstrate proto3 explicit presence: when omitted by
+  // the MCP client, the field is nil rather than empty string.
+  optional string title = 3;
 }
 
 // SayHelloResponse is the response message for SayHello.

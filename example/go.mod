@@ -1,4 +1,4 @@
-module github.com/andreas-04/buf-gen-mcp/example
+module github.com/andreas-04/protoc-gen-mcp/example
 
 go 1.25.0
 

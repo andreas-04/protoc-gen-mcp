@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/andreas-04/buf-gen-mcp/internal/tmpl"
+	"github.com/andreas-04/protoc-gen-mcp/internal/tmpl"
 )
 
 // updateGolden controls whether failing golden assertions overwrite the
@@ -107,12 +107,17 @@ func TestAggregatorTemplate_Golden(t *testing.T) {
 			{
 				ImportPath: "github.com/acme/api/gen/auth",
 				Alias:      "auth",
-				Services:   []string{"AuthService"},
+				Services: []registeredService{
+					{GoName: "AuthService", FieldName: "AuthService"},
+				},
 			},
 			{
 				ImportPath: "github.com/acme/api/gen/billing",
 				Alias:      "billing",
-				Services:   []string{"BillingService", "InvoiceService"},
+				Services: []registeredService{
+					{GoName: "BillingService", FieldName: "BillingService"},
+					{GoName: "InvoiceService", FieldName: "InvoiceService"},
+				},
 			},
 		},
 		SourceFiles: []string{"auth/v1/auth.proto", "billing/v1/billing.proto"},

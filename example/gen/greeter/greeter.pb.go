@@ -27,7 +27,11 @@ type SayHelloRequest struct {
 	// name is the person to greet.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// language is the BCP-47 language tag for the greeting, e.g. "en" or "es".
-	Language      string `protobuf:"bytes,2,opt,name=language,proto3" json:"language,omitempty"`
+	Language string `protobuf:"bytes,2,opt,name=language,proto3" json:"language,omitempty"`
+	// title is an honorific to prefix the name with, e.g. "Dr." or "Ms.".
+	// Marked optional to demonstrate proto3 explicit presence: when omitted by
+	// the MCP client, the field is nil rather than empty string.
+	Title         *string `protobuf:"bytes,3,opt,name=title,proto3,oneof" json:"title,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -72,6 +76,13 @@ func (x *SayHelloRequest) GetName() string {
 func (x *SayHelloRequest) GetLanguage() string {
 	if x != nil {
 		return x.Language
+	}
+	return ""
+}
+
+func (x *SayHelloRequest) GetTitle() string {
+	if x != nil && x.Title != nil {
+		return *x.Title
 	}
 	return ""
 }
@@ -218,10 +229,12 @@ var File_greeter_greeter_proto protoreflect.FileDescriptor
 
 const file_greeter_greeter_proto_rawDesc = "" +
 	"\n" +
-	"\x15greeter/greeter.proto\x12\agreeter\"A\n" +
+	"\x15greeter/greeter.proto\x12\agreeter\"f\n" +
 	"\x0fSayHelloRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
-	"\blanguage\x18\x02 \x01(\tR\blanguage\",\n" +
+	"\blanguage\x18\x02 \x01(\tR\blanguage\x12\x19\n" +
+	"\x05title\x18\x03 \x01(\tH\x00R\x05title\x88\x01\x01B\b\n" +
+	"\x06_title\",\n" +
 	"\x10SayHelloResponse\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\"'\n" +
 	"\x11SayGoodbyeRequest\x12\x12\n" +
@@ -231,7 +244,7 @@ const file_greeter_greeter_proto_rawDesc = "" +
 	"\x0eGreeterService\x12?\n" +
 	"\bSayHello\x12\x18.greeter.SayHelloRequest\x1a\x19.greeter.SayHelloResponse\x12E\n" +
 	"\n" +
-	"SayGoodbye\x12\x1a.greeter.SayGoodbyeRequest\x1a\x1b.greeter.SayGoodbyeResponseB7Z5github.com/andreas-04/buf-gen-mcp/example/gen/greeterb\x06proto3"
+	"SayGoodbye\x12\x1a.greeter.SayGoodbyeRequest\x1a\x1b.greeter.SayGoodbyeResponseB:Z8github.com/andreas-04/protoc-gen-mcp/example/gen/greeterb\x06proto3"
 
 var (
 	file_greeter_greeter_proto_rawDescOnce sync.Once
@@ -269,6 +282,7 @@ func file_greeter_greeter_proto_init() {
 	if File_greeter_greeter_proto != nil {
 		return
 	}
+	file_greeter_greeter_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

@@ -18,8 +18,9 @@ import (
 // with protojson, so the struct can be round-tripped through json.Marshal /
 // protojson.Unmarshal.
 type SayHelloInput struct {
-	Name     string `json:"name" jsonschema:"name is the person to greet."`
-	Language string `json:"language" jsonschema:"language is the BCP-47 language tag for the greeting, e.g. 'en' or 'es'."`
+	Name     string  `json:"name" jsonschema:"name is the person to greet."`
+	Language string  `json:"language" jsonschema:"language is the BCP-47 language tag for the greeting, e.g. 'en' or 'es'."`
+	Title    *string `json:"title,omitempty" jsonschema:"title is an honorific to prefix the name with, e.g. 'Dr.' or 'Ms.'.  Marked optional to demonstrate proto3 explicit presence: when omitted by  the MCP client, the field is nil rather than empty string."`
 }
 
 // SayGoodbyeInput is the MCP tool input type for the SayGoodbye RPC.

@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 
-	pb "github.com/andreas-04/buf-gen-mcp/example/gen/greeter"
+	pb "github.com/andreas-04/protoc-gen-mcp/example/gen/greeter"
 )
 
 // Server is a tiny GreeterService that translates greetings by BCP-47
@@ -27,7 +27,14 @@ func (Server) SayHello(_ context.Context, req *pb.SayHelloRequest) (*pb.SayHello
 	case "de":
 		greeting = "Hallo"
 	}
-	return &pb.SayHelloResponse{Message: fmt.Sprintf("%s, %s!", greeting, req.GetName())}, nil
+	// proto3 optional: nil means absent, so we can distinguish "no title"
+	// from "explicitly empty title". GetTitle returns "" in both cases, but
+	// the presence check uses Title directly.
+	name := req.GetName()
+	if req.Title != nil {
+		name = *req.Title + " " + name
+	}
+	return &pb.SayHelloResponse{Message: fmt.Sprintf("%s, %s!", greeting, name)}, nil
 }
 
 func (Server) SayGoodbye(_ context.Context, req *pb.SayGoodbyeRequest) (*pb.SayGoodbyeResponse, error) {

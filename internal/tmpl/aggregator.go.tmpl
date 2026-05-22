@@ -66,7 +66,7 @@ type Impls struct {
 {{- range .Packages}}
 {{- $alias := .Alias}}
 {{- range .Services}}
-	{{.}} {{$alias}}.{{.}}Server
+	{{.FieldName}} {{$alias}}.{{.GoName}}Server
 {{- end}}
 {{- end}}
 }
@@ -85,7 +85,7 @@ func Register(s *mcp.Server, conn grpc.ClientConnInterface) {
 {{- range .Packages}}
 {{- $alias := .Alias}}
 {{- range .Services}}
-	{{$alias}}.Register{{.}}Tools(s, {{$alias}}.New{{.}}Client(conn))
+	{{$alias}}.Register{{.GoName}}Tools(s, {{$alias}}.New{{.GoName}}Client(conn))
 {{- end}}
 {{- end}}
 }
@@ -97,8 +97,8 @@ func RegisterLocal(s *mcp.Server, impls Impls) {
 {{- range .Packages}}
 {{- $alias := .Alias}}
 {{- range .Services}}
-	if impls.{{.}} != nil {
-		{{$alias}}.Register{{.}}Tools(s, {{$alias}}.NewLocal{{.}}Client(impls.{{.}}))
+	if impls.{{.FieldName}} != nil {
+		{{$alias}}.Register{{.GoName}}Tools(s, {{$alias}}.NewLocal{{.GoName}}Client(impls.{{.FieldName}}))
 	}
 {{- end}}
 {{- end}}
@@ -188,10 +188,7 @@ func Run(ctx context.Context, cfg Config) error {
 		if err != nil {
 			return err
 		}
-		dialOpts = append(dialOpts,
-			grpc.WithUnaryInterceptor(metadataUnaryInterceptor(md)),
-			grpc.WithStreamInterceptor(metadataStreamInterceptor(md)),
-		)
+		dialOpts = append(dialOpts, grpc.WithUnaryInterceptor(metadataUnaryInterceptor(md)))
 	}
 
 	conn, err := grpc.NewClient(cfg.GRPCAddr, dialOpts...)
@@ -273,12 +270,6 @@ func parseMetadata(pairs []string) (metadata.MD, error) {
 func metadataUnaryInterceptor(md metadata.MD) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		return invoker(metadata.NewOutgoingContext(ctx, md), method, req, reply, cc, opts...)
-	}
-}
-
-func metadataStreamInterceptor(md metadata.MD) grpc.StreamClientInterceptor {
-	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-		return streamer(metadata.NewOutgoingContext(ctx, md), desc, cc, method, opts...)
 	}
 }
 

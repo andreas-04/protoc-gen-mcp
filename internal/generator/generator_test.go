@@ -273,6 +273,35 @@ func TestOptionsSet(t *testing.T) {
 	})
 }
 
+func TestImplsFieldDisambiguation(t *testing.T) {
+	pkgs := []*registeredPackage{
+		{Alias: "auth", Services: []registeredService{{GoName: "AuthService"}}},
+		{Alias: "billing", Services: []registeredService{{GoName: "AuthService"}, {GoName: "BillingService"}}},
+		{Alias: "admin", Services: []registeredService{{GoName: "AuthService"}}},
+	}
+	assignFieldNames(pkgs)
+
+	want := []string{"AuthService", "BillingAuthService", "BillingService", "AdminAuthService"}
+	var got []string
+	for _, p := range pkgs {
+		for _, s := range p.Services {
+			got = append(got, s.FieldName)
+		}
+	}
+	if !sliceEqual(got, want) {
+		t.Errorf("field names = %v; want %v", got, want)
+	}
+
+	// All field names must be unique.
+	seen := map[string]bool{}
+	for _, n := range got {
+		if seen[n] {
+			t.Errorf("duplicate field name %q in %v", n, got)
+		}
+		seen[n] = true
+	}
+}
+
 func sliceEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

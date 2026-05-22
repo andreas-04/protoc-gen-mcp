@@ -5,6 +5,6 @@
 // control, swap Main() for a call to mcpserver.Run with a custom Config.
 package main
 
-import "github.com/andreas-04/buf-gen-mcp/example/gen/mcpserver"
+import "github.com/andreas-04/protoc-gen-mcp/example/gen/mcpserver"
 
 func main() { mcpserver.Main() }

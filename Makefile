@@ -1,4 +1,4 @@
-.PHONY: build install test test-example generate-example build-example run-example clean
+.PHONY: build install test test-example generate-example build-example run-example docker clean
 
 BINARY := protoc-gen-mcp
 

@@ -9,12 +9,13 @@ import (
 	"fmt"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/types/pluginpb"
 
-	"github.com/andreas-04/buf-gen-mcp/internal/generator"
+	"github.com/andreas-04/protoc-gen-mcp/internal/generator"
 )
 
-// version is the protoc-gen-mcp release. Kept in sync with buf.plugin.yaml
-// and reported by `protoc-gen-mcp -version`.
+// version is the protoc-gen-mcp release and is reported by
+// `protoc-gen-mcp -version`.
 const version = "v0.1.0"
 
 func main() {
@@ -31,6 +32,9 @@ func main() {
 	protogen.Options{
 		ParamFunc: opts.Set,
 	}.Run(func(gen *protogen.Plugin) error {
+		// Advertise proto3 optional support — without this protoc/buf warn
+		// every time a .proto file uses the 'optional' keyword.
+		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 		g := generator.New(opts)
 		for _, f := range gen.Files {
 			if !f.Generate {

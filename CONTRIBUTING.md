@@ -82,8 +82,7 @@ There are three layers of tests; all of them run in CI.
 
 ## Releasing (maintainer notes)
 
-1. Bump the `version` constant in `cmd/protoc-gen-mcp/main.go` and the
-   `plugin_version` field in `buf.plugin.yaml`.
+1. Bump the `version` constant in `cmd/protoc-gen-mcp/main.go`.
 2. Tag `vX.Y.Z`, push the tag, and write the release notes in the GitHub
    release UI from the commit log since the previous tag.
 3. The aggregator's default `ServerVersion` is set per-generation by the

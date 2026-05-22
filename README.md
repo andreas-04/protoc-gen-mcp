@@ -1,6 +1,6 @@
-# buf-gen-mcp
+# protoc-gen-mcp
 
-`protoc-gen-mcp` turns your existing gRPC services into [MCP][mcp] tools so
+A protoc plugin that turns your existing gRPC services into [MCP][mcp] tools so
 LLM clients can call them directly. Every unary RPC becomes a typed MCP
 tool; you don't write or maintain any glue code.
 
@@ -25,7 +25,7 @@ existing gRPC service gains an MCP HTTP listener with a few extra lines.
 ### 1. Install the plugin
 
 ```sh
-go install github.com/andreas-04/buf-gen-mcp/cmd/protoc-gen-mcp@latest
+go install github.com/andreas-04/protoc-gen-mcp/cmd/protoc-gen-mcp@latest
 ```
 
 ### 2. Add it to `buf.gen.yaml`

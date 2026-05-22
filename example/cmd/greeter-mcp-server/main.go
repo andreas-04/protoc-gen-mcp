@@ -11,9 +11,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	pb "github.com/andreas-04/buf-gen-mcp/example/gen/greeter"
-	"github.com/andreas-04/buf-gen-mcp/example/gen/mcpserver"
-	"github.com/andreas-04/buf-gen-mcp/example/internal/greeterimpl"
+	pb "github.com/andreas-04/protoc-gen-mcp/example/gen/greeter"
+	"github.com/andreas-04/protoc-gen-mcp/example/gen/mcpserver"
+	"github.com/andreas-04/protoc-gen-mcp/example/internal/greeterimpl"
 	"google.golang.org/grpc"
 )
 
