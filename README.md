@@ -16,14 +16,10 @@ Run `buf generate` and you'll have:
 - a per-proto `*_mcp.pb.go` library with typed `Register<Service>Tools` helpers and an in-process adapter, and
 - a `mcpserver` package with `NewServer`, `RegisterLocal`, and `ServeHTTP` that drop into your existing gRPC main.
 
-Streaming RPCs are skipped — MCP's tool model is request/response. The
-generated MCP server speaks streamable HTTP (the transport Claude Code,
-Claude Desktop, and other modern clients use).
+ The
+generated MCP server speaks streamable HTTP the transport modern MCP clients use.
 
-## Quickstart — embed in your gRPC service
-
-The recommended pattern: one binary, one process, two endpoints. Your
-existing gRPC service gains an MCP HTTP listener with a few extra lines.
+## Quickstart 
 
 ### 1. Install the plugin
 
@@ -78,9 +74,6 @@ func main() {
 }
 ```
 
-`RegisterLocal` dispatches directly to your server impl — no second port,
-no extra gRPC dial, no serialization round-trip.
-
 ### 5. Point an MCP client at it
 
 ```json
@@ -94,8 +87,7 @@ no extra gRPC dial, no serialization round-trip.
 }
 ```
 
-Works with Claude Code, Claude Desktop, and any other client speaking the
-MCP streamable-HTTP transport.
+Works with any  client speaking the MCP streamable-HTTP transport.
 
 ## When you want a separate process
 
